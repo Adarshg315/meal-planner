@@ -29,14 +29,18 @@ export async function POST(req: Request) {
 
     // 1. Load recipes from Firestore
     const recipesSnap = await getDocs(collection(db, "recipes"));
-    const recipes: Recipe[] = recipesSnap.docs.map((d) => {
+    const recipes = recipesSnap.docs.map((d) => {
       const data = d.data() as DocumentData;
       return {
         id: d.id,
         title: (data.title as string) || (data.name as string) || "Recipe",
         videoUrl:
           (data.videoUrl as string) || (data.source_url as string) || "",
-        ingredients: (data.ingredients as string[]) || [],
+        ingredients: ((data.ingredients as string[]) || []).map((ing) => ({
+          name: ing,
+          quantity: 0, // Provide default or parse from data if available
+          unit: "piece" as import("@/lib/types").Unit, // Use a valid Unit value
+        })),
         createdAt: (data.createdAt as string) || new Date().toISOString(),
       };
     });
