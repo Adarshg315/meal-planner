@@ -82,7 +82,6 @@ export async function POST(req: Request) {
         .filter(Boolean);
       recipients = envList;
     }
-    recipients = recipients.slice(0, 2); // only 2 needed for vote confirmation
 
     // 5. Build WhatsApp message
     const bodyText =
