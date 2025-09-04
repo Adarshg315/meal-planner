@@ -10,7 +10,7 @@ import {
   doc,
   DocumentData,
 } from "firebase/firestore";
-import { MealSession, Recipe } from "@/lib/types";
+import { MealSession } from "@/lib/types";
 import { normalizeWhatsAppNumber, getBaseUrl } from "@/lib/utils";
 
 export const runtime = "nodejs"; // Twilio needs Node runtime
