@@ -43,7 +43,7 @@ export default function MealSessionPage() {
       alert("You must login to vote.");
       return;
     }
-    
+
     if (!session) return;
 
     const votes = { ...(session.votes || {}), [user.uid]: optionId };
@@ -99,15 +99,23 @@ export default function MealSessionPage() {
           {session.options.map((opt) => (
             <div
               key={opt.id}
-              className="border p-3 rounded shadow flex justify-between"
+              className="border p-3 rounded shadow flex justify-between items-center"
             >
               <span>{opt.title}</span>
-              <button
-                onClick={() => vote(opt.id)}
-                className="px-3 py-1 bg-blue-500 text-white rounded cursor-pointer"
-              >
-                Vote
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => vote(opt.id)}
+                  className="px-3 py-1 bg-blue-500 text-white rounded cursor-pointer"
+                >
+                  Vote
+                </button>
+                <span className="text-sm text-gray-500">
+                  {Object.entries(session.votes || {})
+                    .filter(([, votedOption]) => votedOption === opt.id)
+                    .map(([voterId]) => voterId)
+                    .join(", ") || "No votes yet"}
+                </span>
+              </div>
             </div>
           ))}
         </div>
