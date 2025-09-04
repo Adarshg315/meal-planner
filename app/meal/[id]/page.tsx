@@ -39,7 +39,12 @@ export default function MealSessionPage() {
   }, [params?.id]);
 
   async function vote(optionId: string) {
-    if (!user || !session) return;
+    if (!user) {
+      alert("You must login to vote.");
+      return;
+    }
+    
+    if (!session) return;
 
     const votes = { ...(session.votes || {}), [user.uid]: optionId };
 
