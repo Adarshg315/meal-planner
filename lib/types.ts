@@ -14,7 +14,7 @@ export interface Recipe {
   videoUrl: string;
   ingredients: Ingredient[];
   addedBy: string;
-  createdAt: any;
+  createdAt: Date;
 }
 
 export interface PantryItem {
@@ -36,7 +36,7 @@ export interface GroceryNeed {
 export interface GrocerySummary {
   required: GroceryNeed[];
   missing: GroceryNeed[];
-  computedAt?: any;
+  computedAt?: Date;
 }
 
 export interface MealSession {

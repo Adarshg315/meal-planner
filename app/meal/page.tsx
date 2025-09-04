@@ -4,14 +4,25 @@ import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import Link from "next/link";
+import { MealSession } from "@/lib/types";
 
 export default function MealSessionsPage() {
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<MealSession[]>([]);
 
   useEffect(() => {
     async function fetchSessions() {
       const snap = await getDocs(collection(db, "mealSessions"));
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const data = snap.docs.map((d) => {
+        const docData = d.data();
+        return {
+          id: d.id,
+          mealType: docData.mealType,
+          date: docData.date,
+          options: docData.options,
+          votes: docData.votes,
+          confirmedMeal: docData.confirmedMeal,
+        } as MealSession;
+      });
       setSessions(data);
     }
     fetchSessions();
