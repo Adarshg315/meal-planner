@@ -12,7 +12,7 @@ export type Recipe = {
   id: string;
   title: string;
   videoUrl?: string;
-  ingredients?: string[];
+  ingredients: Ingredient[];
   createdAt: string; // ISO string
 };
 
