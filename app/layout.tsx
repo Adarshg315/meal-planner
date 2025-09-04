@@ -3,6 +3,7 @@
 // app/layout.tsx
 import "./globals.css";
 import { ReactNode, useEffect, useState } from "react";
+import Image from "next/image";
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { loginWithGoogle, logout } from "../lib/auth";
@@ -19,19 +20,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="bg-gray-50 text-gray-900">
         <header className="p-4 flex justify-between items-center shadow">
-            <h1
-            className="text-xl font-bold cursor-pointer"
-            onClick={() => window.location.pathname = "/"}
-            >
-            🍲 Meal Planner
-            </h1>
+          <h1 className="text-xl font-bold">🍲 Meal Planner</h1>
           <div>
             {user ? (
               <div className="flex items-center gap-2">
-                <img
-                  src={user.photoURL || ""}
+                <Image
+                  src={user.photoURL || "https://placehold.co/60x40"}
                   alt="avatar"
+                  width={32}
+                  height={32}
                   className="w-8 h-8 rounded-full"
+                  priority
                 />
                 <span>{user.displayName}</span>
                 <button
