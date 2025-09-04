@@ -8,14 +8,20 @@ export interface Ingredient {
   unit: Unit;
 }
 
-export interface Recipe {
+export type Recipe = {
   id: string;
   title: string;
-  videoUrl: string;
-  ingredients: Ingredient[];
-  addedBy: string;
-  createdAt: Date;
-}
+  videoUrl?: string;
+  ingredients?: string[];
+  createdAt: string; // ISO string
+};
+
+
+export type User = {
+  id: string;
+  name: string;
+  phone?: string; // E.164 format, e.g., +919876543210
+};
 
 export interface PantryItem {
   id: string;
@@ -39,12 +45,14 @@ export interface GrocerySummary {
   computedAt?: Date;
 }
 
-export interface MealSession {
+export type MealSession = {
   id: string;
-  mealType: string; // Breakfast | Lunch | Dinner
-  date: string;
-  options: { id: string; title: string }[];
-  votes: Record<string, string>;
-  confirmedMeal?: string;
-  grocery?: GrocerySummary;
-}
+  mealType: "Breakfast" | "Lunch" | "Dinner";
+  date: string; // YYYY-MM-DD
+  options: Recipe[];
+  votes: Record<string, string>; // userId -> recipeId
+  confirmedMeal: string | null; // recipeId or null
+  invited: boolean;
+  invitedTo?: string[];
+  createdAt: string; // ISO string
+};
