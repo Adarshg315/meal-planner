@@ -20,17 +20,29 @@ export default function Dashboard() {
       <button
         onClick={() => createSession("lunch")}
         disabled={loading}
-        className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+        className={`px-4 py-2 rounded-lg w-48 text-center ${
+          loading ? "bg-gray-300 text-gray-500" : "bg-blue-500 text-white"
+        }`}
       >
-        Create Lunch Session
+        {loading ? (
+          <span className="animate-pulse inline-block w-full">Loading...</span>
+        ) : (
+          "Create Lunch Session"
+        )}
       </button>
 
       <button
         onClick={() => createSession("dinner")}
         disabled={loading}
-        className="px-4 py-2 bg-green-500 text-white rounded-lg"
+        className={`px-4 py-2 rounded-lg w-48 text-center ${
+          loading ? "bg-gray-300 text-gray-500" : "bg-green-500 text-white"
+        }`}
       >
-        Create Dinner Session
+        {loading ? (
+          <span className="animate-pulse inline-block w-full">Loading...</span>
+        ) : (
+          "Create Dinner Session"
+        )}
       </button>
     </div>
   );
