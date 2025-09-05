@@ -96,28 +96,29 @@ export default function MealSessionPage() {
         </p>
       ) : (
         <div className="space-y-3">
-          {session.options.map((opt) => (
-            <div
-              key={opt.id}
-              className="border p-3 rounded shadow flex justify-between items-center"
-            >
-              <span>{opt.title}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => vote(opt.id)}
-                  className="px-3 py-1 bg-blue-500 text-white rounded cursor-pointer"
-                >
-                  Vote
-                </button>
-                <span className="text-sm text-gray-500">
-                  {Object.entries(session.votes || {})
-                    .filter(([, votedOption]) => votedOption === opt.id)
-                    .map(([voterId]) => voterId)
-                    .join(", ") || "No votes yet"}
-                </span>
+          {session.options.map((opt) => {
+            const voteCount = Object.values(session.votes || {}).filter(
+              (votedOption) => votedOption === opt.id
+            ).length;
+
+            return (
+              <div
+                key={opt.id}
+                className="border p-3 rounded shadow flex justify-between items-center"
+              >
+                <span>{opt.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">{voteCount} votes</span>
+                  <button
+                    onClick={() => vote(opt.id)}
+                    className="px-3 py-1 bg-blue-500 text-white rounded cursor-pointer"
+                  >
+                    Vote
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
