@@ -43,7 +43,7 @@ export default function MealSessionsPage() {
               </p>
               {s.confirmedMeal ? (
                 <p className="text-green-600">
-                  ✅ Confirmed: {s.confirmedMeal}
+                  ✅ Confirmed: {s.confirmedMeal.title}
                 </p>
               ) : (
                 <p className="text-gray-500">Pending votes...</p>

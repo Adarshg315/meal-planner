@@ -3,15 +3,16 @@ import twilio from "twilio";
 import { db } from "@/lib/firebase";
 import {
   collection,
-  getDocs,
   addDoc,
   serverTimestamp,
   updateDoc,
   doc,
-  DocumentData,
 } from "firebase/firestore";
-import { MealSession } from "@/lib/types";
+import { MealSession, Recipe } from "@/lib/types";
 import { normalizeWhatsAppNumber, getBaseUrl } from "@/lib/utils";
+import { isValidRecipe } from "@/lib/recipeUtils";
+import { generateRecipes } from "@/lib/llm";
+import { getTopYouTubeVideoUrl } from "@/lib/youtube";
 
 export const runtime = "nodejs"; // Twilio needs Node runtime
 
@@ -20,47 +21,64 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN!
 );
 
+async function generateValidRecipes(prefs: any, count: number): Promise<Recipe[]> {
+  const recipes: Recipe[] = [];
+  while (recipes.length < count) {
+    const newRecipes = (await generateRecipes(prefs)) as Recipe[];
+    for (const newRecipe of newRecipes) {
+      if (
+        isValidRecipe(newRecipe) &&
+        !recipes.some((r) => r.title.toLowerCase() === newRecipe.title.toLowerCase())
+      ) {
+        const newRef = await addDoc(collection(db, "recipes"), {
+          ...newRecipe,
+          createdAt: serverTimestamp(),
+          preparedCount: 0,
+        });
+        recipes.push({ ...newRecipe, id: newRef.id });
+        if (recipes.length === count) break;
+      }
+    }
+  }
+
+  // Enrich recipes with video URLs
+  const enrichedRecipes = await Promise.all(
+    recipes.map(async (r) => ({
+      ...r,
+      videoUrl: await getTopYouTubeVideoUrl(r.title),
+    }))
+  );
+
+  return enrichedRecipes;
+}
+
+async function sendWhatsAppMessages(recipients: string[], bodyText: string) {
+  return Promise.all(
+    recipients.map((recipient) =>
+      twilioClient.messages.create({
+        from: process.env.TWILIO_WHATSAPP_FROM!,
+        to: normalizeWhatsAppNumber(recipient),
+        body: bodyText,
+      })
+    )
+  );
+}
+
 export async function POST(req: Request) {
   try {
-    const body: { mealType?: string; recipients?: string[] } = await req
-      .json()
-      .catch(() => ({}));
+    const body: { mealType?: string; recipients?: string[]; prefs?: any } =
+      await req.json().catch(() => ({}));
     const mealType = (body.mealType as MealSession["mealType"]) || "Dinner";
+    
 
-    // 1. Load recipes from Firestore
-    const recipesSnap = await getDocs(collection(db, "recipes"));
-    const recipes = recipesSnap.docs.map((d) => {
-      const data = d.data() as DocumentData;
-      return {
-        id: d.id,
-        title: (data.title as string) || (data.name as string) || "Recipe",
-        videoUrl:
-          (data.videoUrl as string) || (data.source_url as string) || "",
-        ingredients: ((data.ingredients as string[]) || []).map((ing) => ({
-          name: ing,
-          quantity: 0, // Provide default or parse from data if available
-          unit: "piece" as import("@/lib/types").Unit, // Use a valid Unit value
-        })),
-        createdAt: (data.createdAt as string) || new Date().toISOString(),
-      };
-    });
+    // Generate and validate recipes
+    const generatedRecipes = await generateValidRecipes(body.prefs || {}, 3);
 
-    if (recipes.length < 3) {
-      return NextResponse.json(
-        { error: "Need at least 3 recipes in DB" },
-        { status: 400 }
-      );
-    }
-
-    // 2. Choose 3 random recipes
-    const shuffled = [...recipes].sort(() => 0.5 - Math.random());
-    const chosen = shuffled.slice(0, 3);
-
-    // 3. Create session doc
+    // Create session document
     const newSession: Omit<MealSession, "id"> = {
       mealType,
       date: new Date().toISOString().split("T")[0],
-      options: chosen,
+      options: generatedRecipes,
       votes: {},
       confirmedMeal: null,
       invited: false,
@@ -75,41 +93,29 @@ export async function POST(req: Request) {
 
     const sessionUrl = `${getBaseUrl()}/meal/${sessionRef.id}`;
 
-    // 4. Resolve recipients (body or env)
-    let recipients: string[] = [];
-    if (body.recipients && body.recipients.length > 0) {
-      recipients = body.recipients;
-    } else {
-      const envList = (process.env.WHATSAPP_RECIPIENTS || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      recipients = envList;
+    // Resolve recipients
+    const recipients =
+      body.recipients && body.recipients.length > 0
+        ? body.recipients
+        : (process.env.WHATSAPP_RECIPIENTS || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+    if (!recipients || recipients.length === 0) {
+      throw new Error("No recipients available to send messages.");
     }
 
-    // 5. Build WhatsApp message
+    // Build WhatsApp message
     const bodyText =
       `🍽 New ${mealType} session — please vote!\n\n` +
-      `1) ${chosen[0].title}\n` +
-      `2) ${chosen[1].title}\n` +
-      `3) ${chosen[2].title}\n\n` +
-      `Vote here: ${sessionUrl}`;
+      generatedRecipes.map((r, i) => `${i + 1}) ${r.title}`).join("\n") +
+      `\n\nVote here: ${sessionUrl}`;
 
-    // 6. Send messages
-    await Promise.all(
-      recipients.map((r) => {
+    // Send WhatsApp messages
+    await sendWhatsAppMessages(recipients, bodyText);
 
-        console.log("Sending WhatsApp to:", normalizeWhatsAppNumber(r), " | ", process.env.TWILIO_WHATSAPP_FROM!, bodyText);  
-
-        return twilioClient.messages.create({
-          from: process.env.TWILIO_WHATSAPP_FROM!,
-          to: normalizeWhatsAppNumber(r),
-          body: bodyText,
-        });
-      })
-    );
-
-    // 7. Update session with invited metadata
+    // Update session with invited metadata
     await updateDoc(doc(db, "mealSessions", sessionRef.id), {
       invited: true,
       invitedTo: recipients,
@@ -118,11 +124,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, id: sessionRef.id });
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      console.error("create session error:", err.message);
-      return NextResponse.json({ error: err.message }, { status: 500 });
-    }
-    console.error("create session unknown error:", err);
-    return NextResponse.json({ error: "Unknown error" }, { status: 500 });
+    console.error("create session error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 // lib/types.ts
 
-export type Unit = "g" | "ml" | "pcs";
+// Allowed units for ingredients (expand later if needed)
+export type Unit = "piece" | "g" | "ml" | "tsp" | "tbsp" | "cup" | "pcs";
 
 export interface Ingredient {
   name: string;
@@ -8,14 +9,22 @@ export interface Ingredient {
   unit: Unit;
 }
 
-export type Recipe = {
-  id: string;
+// Recipe structure
+export interface Recipe {
+  id?: string; // Firestore doc id
   title: string;
   videoUrl?: string;
-  ingredients: Ingredient[];
-  createdAt: string; // ISO string
-};
-
+  ingredients: {
+    name: string;
+    quantity: number;
+    unit: Unit;
+  }[];
+  servings: number;
+  prep_time_minutes: number;
+  steps: string[];
+  createdAt?: string; // ISO string or Firestore timestamp
+  preparedCount: number; // how many times cooked
+}
 
 export type User = {
   id: string;
@@ -23,36 +32,20 @@ export type User = {
   phone?: string; // E.164 format, e.g., +919876543210
 };
 
-export interface PantryItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: Unit;
-  threshold: number;
-}
-
-export interface GroceryNeed {
-  name: string;
-  unit: Unit;
-  needed: number;
-  available: number;
-  buy: number;
-}
-
-export interface GrocerySummary {
-  required: GroceryNeed[];
-  missing: GroceryNeed[];
-  computedAt?: Date;
-}
-
-export type MealSession = {
-  id: string;
-  mealType: "Breakfast" | "Lunch" | "Dinner";
-  date: string; // YYYY-MM-DD
-  options: Recipe[];
-  votes: Record<string, string>; // userId -> recipeId
-  confirmedMeal: string | null; // recipeId or null
-  invited: boolean;
-  invitedTo?: string[];
-  createdAt: string; // ISO string
+// Vote mapping → userId → chosen recipeId
+export type VoteMap = {
+  [userId: string]: string; // maps to recipe.id
 };
+
+// Meal session structure
+export interface MealSession {
+  id?: string; // Firestore doc id
+  mealType: "Breakfast" | "Lunch" | "Dinner" | "Snack";
+  date: string; // YYYY-MM-DD
+  options: Recipe[]; // 3 recipes to choose from
+  votes: VoteMap;
+  confirmedMeal: Recipe | null;
+  invited: boolean;
+  invitedTo: string[]; // phone numbers
+  createdAt: string; // ISO string
+}
