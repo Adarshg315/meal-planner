@@ -8,7 +8,7 @@ import {
   updateDoc,
   doc,
 } from "firebase/firestore";
-import { MealSession, Recipe } from "@/lib/types";
+import { MealSession, Preferences, Recipe } from "@/lib/types";
 import { normalizeWhatsAppNumber, getBaseUrl } from "@/lib/utils";
 import { isValidRecipe } from "@/lib/recipeUtils";
 import { generateRecipes } from "@/lib/llm";
@@ -21,23 +21,31 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN!
 );
 
-async function generateValidRecipes(prefs: any, count: number): Promise<Recipe[]> {
+async function generateValidRecipes(
+  prefs: Preferences,
+  count: number
+): Promise<Recipe[]> {
   const recipes: Recipe[] = [];
-  while (recipes.length < count) {
-    const newRecipes = (await generateRecipes(prefs)) as Recipe[];
-    for (const newRecipe of newRecipes) {
-      if (
-        isValidRecipe(newRecipe) &&
-        !recipes.some((r) => r.title.toLowerCase() === newRecipe.title.toLowerCase())
-      ) {
-        const newRef = await addDoc(collection(db, "recipes"), {
-          ...newRecipe,
-          createdAt: serverTimestamp(),
-          preparedCount: 0,
-        });
-        recipes.push({ ...newRecipe, id: newRef.id });
-        if (recipes.length === count) break;
-      }
+
+  const newRecipes = (await generateRecipes(prefs, count)) as Recipe[];
+  
+  for (const newRecipe of newRecipes) {
+    if (
+      isValidRecipe(newRecipe) &&
+      !recipes.some(
+        (r) => r.title.toLowerCase() === newRecipe.title.toLowerCase()
+      )
+    ) {
+      
+      const newRef = await addDoc(collection(db, "recipes"), {
+        ...newRecipe,
+        createdAt: serverTimestamp(),
+        preparedCount: 0,
+      });
+
+      recipes.push({ ...newRecipe, id: newRef.id });
+
+      if (recipes.length === count) break;
     }
   }
 
@@ -66,13 +74,13 @@ async function sendWhatsAppMessages(recipients: string[], bodyText: string) {
 
 export async function POST(req: Request) {
   try {
-    const body: { mealType?: string; recipients?: string[]; prefs?: any } =
+    const body: { mealType: string; recipients: string[]; prefs: Preferences} =
       await req.json().catch(() => ({}));
-    const mealType = (body.mealType as MealSession["mealType"]) || "Dinner";
-    
+
+    const mealType = (body.mealType as MealSession["mealType"]);
 
     // Generate and validate recipes
-    const generatedRecipes = await generateValidRecipes(body.prefs || {}, 3);
+    const generatedRecipes = await generateValidRecipes(body.prefs, 3);
 
     // Create session document
     const newSession: Omit<MealSession, "id"> = {

@@ -2,25 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { db, auth } from "../../../lib/firebase";
-import {
-  doc,
-  updateDoc,
-  onSnapshot,
-} from "firebase/firestore";
+import { doc, updateDoc, onSnapshot } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useParams } from "next/navigation";
-
-interface MealOption {
-  id: string;
-  title: string;
-  videoUrl?: string;
-}
+import { Recipe } from "@/lib/types";
 
 interface MealSession {
   id: string;
   mealType: string;
   date: string;
-  options: MealOption[];
+  options: Recipe[];
   votes?: Record<string, string>;
   confirmedMeal?: string;
 }
@@ -32,9 +23,12 @@ export default function MealSessionPage() {
 
   useEffect(() => {
     if (!params?.id) return;
-    const unsub = onSnapshot(doc(db, "mealSessions", params.id as string), (snap) => {
-      setSession({ id: snap.id, ...snap.data() } as MealSession);
-    });
+    const unsub = onSnapshot(
+      doc(db, "mealSessions", params.id as string),
+      (snap) => {
+        setSession({ id: snap.id, ...snap.data() } as MealSession);
+      }
+    );
     return () => unsub();
   }, [params?.id]);
 
@@ -67,6 +61,14 @@ export default function MealSessionPage() {
     // 🔔 If newly confirmed, notify cook
     if (confirmedMeal && !session.confirmedMeal) {
       const recipe = session.options.find((o) => o.id === confirmedMeal);
+
+      // ✅ update recipe's lastPreparedAt in Firestore
+      if (recipe?.id) {
+        await updateDoc(doc(db, "recipes", recipe.id), {
+          lastPreparedAt: new Date().toISOString(),
+        });
+      }
+
       await fetch("/api/notify-cook", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,7 +94,8 @@ export default function MealSessionPage() {
 
       {session.confirmedMeal ? (
         <p className="text-green-600 font-semibold">
-          ✅ Confirmed Meal: {session.options.find((o) => o.id === session.confirmedMeal)?.title}
+          ✅ Confirmed Meal:{" "}
+          {session.options.find((o) => o.id === session.confirmedMeal)?.title}
         </p>
       ) : (
         <div className="space-y-3">
@@ -108,7 +111,9 @@ export default function MealSessionPage() {
               >
                 <span>{opt.title}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">{voteCount} votes</span>
+                  <span className="text-sm text-gray-500">
+                    {voteCount} votes
+                  </span>
                   <button
                     onClick={() => vote(opt.id)}
                     className="px-3 py-1 bg-blue-500 text-white rounded cursor-pointer"

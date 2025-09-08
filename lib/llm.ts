@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
-import { Recipe } from "@/lib/types";
+import { Preferences, Recipe } from "@/lib/types";
 
-// ---- Replace this with your chosen LLM client ----
-// Example with OpenAI (you can swap with any OSS LLM like Ollama):
 import OpenAI from "openai";
-import { buildPrompt } from "./recipeUtils";
+import { buildPrompt, getBlockedRecipes } from "./recipeUtils";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 // 🔥 Simple helper: generate 3 recipes from preferences
-export async function generateRecipes(preferences: any): Promise<Recipe[]> {
-  const prompt = buildPrompt(preferences);
+export async function generateRecipes(
+  preferences: Preferences,
+  count: number
+): Promise<Recipe[]> {
+  // 1. Get blocked recipes (created yesterday, today, tomorrow)
+  const blocked = await getBlockedRecipes();
+  const blockedTitles = blocked.map((r) => r.title);
+
+  const prompt = buildPrompt(preferences, blockedTitles, count);
+
+  console.log("LLM prompt:", prompt);
 
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini", // or your OSS LLM endpoint
@@ -40,11 +47,14 @@ export async function POST(req: Request) {
   try {
     const { preferences } = await req.json();
     if (!preferences) {
-      return NextResponse.json({ error: "Missing preferences" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing preferences" },
+        { status: 400 }
+      );
     }
 
     // 1️⃣ Generate 3 recipes from LLM
-    const recipes = await generateRecipes(preferences);
+    const recipes = await generateRecipes(preferences, 3);
 
     // 2️⃣ Deduplication check (avoid storing duplicates by title)
     const recipesCol = collection(db, "recipes");

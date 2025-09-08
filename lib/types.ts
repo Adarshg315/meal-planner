@@ -11,7 +11,7 @@ export interface Ingredient {
 
 // Recipe structure
 export interface Recipe {
-  id?: string; // Firestore doc id
+  id: string; // Firestore doc id
   title: string;
   videoUrl?: string;
   ingredients: {
@@ -24,6 +24,7 @@ export interface Recipe {
   steps: string[];
   createdAt?: string; // ISO string or Firestore timestamp
   preparedCount: number; // how many times cooked
+  lastPreparedAt?: string; // ISO string, updated when meal confirmed
 }
 
 export type User = {
@@ -49,3 +50,12 @@ export interface MealSession {
   invitedTo: string[]; // phone numbers
   createdAt: string; // ISO string
 }
+
+export type Preferences = {
+  cuisine: string;
+  diet: string;
+  avoid: string[];
+  spiceLevel: string;
+  mealType: string;
+  timeLimit?: number;
+};

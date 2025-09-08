@@ -7,9 +7,11 @@ import Image from "next/image";
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { loginWithGoogle, logout } from "../lib/auth";
+import { useRouter } from "next/navigation";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
@@ -20,7 +22,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="bg-gray-50 text-gray-900">
         <header className="p-4 flex justify-between items-center shadow">
-          <h1 className="text-xl font-bold">🍲 Meal Planner</h1>
+          <h1
+            className="text-xl font-bold cursor-pointer"
+            onClick={() => router.push("/")}
+          >
+            🍲 Meal Planner
+          </h1>
           <div>
             {user ? (
               <div className="flex items-center gap-2">

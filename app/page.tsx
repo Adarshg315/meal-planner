@@ -1,4 +1,5 @@
 "use client";
+import { defaultPreferences } from "@/lib/constants";
 import { useState } from "react";
 
 export default function Dashboard() {
@@ -9,7 +10,7 @@ export default function Dashboard() {
     await fetch("/api/meal-sessions/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mealType }),
+      body: JSON.stringify({ mealType, prefs: defaultPreferences }),
     });
     setLoading(false);
     alert(`New ${mealType} session created!`);
