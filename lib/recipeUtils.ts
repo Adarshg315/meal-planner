@@ -1,20 +1,22 @@
 import { Recipe } from "@/lib/types";
 
-export function buildPrompt(preferences: {
-  cuisine?: string;
-  diet?: string;
-  avoid?: string[];
-  spiceLevel?: "mild" | "medium" | "hot";
-  mealType?: string;
-  timeLimit?: number; // in minutes
-} | null): string {
+export function buildPrompt(
+  preferences: {
+    cuisine: "Any (Indian, global, vegetarian-friendly)",
+    diet: "Vegetarian, high-protein, balanced for both weight gain and fat loss with muscle building",
+    avoid: [],
+    spiceLevel: "medium",
+    mealType: "Lunch and Dinner (with optional snacks/prep suggestions)",
+    timeLimit?: 60; // Default values not applicable for timeLimit due to varying conditions
+  } | null
+): string {
   let prefText = "";
   if (preferences) {
     prefText = `
-User preferences:
+STRICT USER PREFERENCES (must be followed exactly):
 - Cuisine: ${preferences.cuisine || "any"}
 - Diet: ${preferences.diet || "any"}
-- Avoid ingredients: ${preferences.avoid?.join(", ") || "none"}
+- Avoid ingredients (must NOT appear in recipe): ${preferences.avoid?.join(", ") || "none"}
 - Spice level: ${preferences.spiceLevel || "any"}
 - Meal type: ${preferences.mealType || "any"}
 - Maximum prep/cook time: ${preferences.timeLimit || "any"} minutes
@@ -23,26 +25,40 @@ User preferences:
 
   return `
 You are a recipe generator. Output ONLY one JSON object (no commentary).
-The recipe must follow these rules:
-- Respect user preferences strictly (avoid listed allergens/ingredients).
-- Use realistic ingredients that can be cooked in a home kitchen.
-- Ensure prep_time_minutes <= time limit if provided.
-- Adapt spice level appropriately.
-- The dish should fit the requested cuisine, diet, and meal type.
+
+The generated recipes MUST strictly respect ALL user preferences above.
+- Absolutely avoid restricted/forbidden ingredients.
+- Ensure cuisine, diet, meal type, and spice level align exactly with the preferences.
+- Ensure prep_time_minutes does not exceed the specified limit (if provided).
+- Use realistic ingredients and steps that are cookable in a home kitchen.
 
 Schema (return exactly this shape):
+Each recipe must include:
+- "title": string
+- "videoUrl": string
+- "ingredients": an array of 3-5 items, each with { "name": string, "quantity": number, "unit": one of "g" | "ml" | "tsp" | "tbsp" | "cup" | "piece" }
+- "servings": integer
+- "prep_time_minutes": integer
+- "steps": array of 3-5 strings
+
+Return ONLY valid JSON in this exact format (no commentary, no extra text):
+
 {
-  "title": string,
-  "servings": integer,
-  "prep_time_minutes": integer,
-  "ingredients": [ { "name": string, "quantity": number, "unit": string } ],
-  "steps": [ string ],
-  "tags": [ string ],
-  "videoUrl": string | null
+  "recipes": [
+    {
+      "title": "...",
+      "videoUrl": "...",
+      "ingredients": [
+        { "name": "...", "quantity": 200, "unit": "g" }
+      ],
+      "servings": 2,
+      "prep_time_minutes": 20,
+      "steps": ["...", "..."]
+    }
+  ]
 }
 
 ${prefText}
-Now generate three recipes and return ONLY the JSON object.
 `.trim();
 }
 

@@ -6,39 +6,15 @@ import { Recipe } from "@/lib/types";
 // ---- Replace this with your chosen LLM client ----
 // Example with OpenAI (you can swap with any OSS LLM like Ollama):
 import OpenAI from "openai";
+import { buildPrompt } from "./recipeUtils";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 // 🔥 Simple helper: generate 3 recipes from preferences
-export async function generateRecipes(preferences: string): Promise<Recipe[]> {
-  const prompt = `
-  Generate 3 unique meal recipes based on these preferences: ${preferences}.
-  Each recipe must include:
-  - title
-  - videoUrl
-  - 3-5 ingredients (name, quantity, unit: g/ml/tsp/tbsp/cup/piece)
-  - servings
-  - prep_time_minutes
-  - 3-5 steps
-
-  Return only valid JSON in this exact format without any additional text or symbols:
-  {
-    "recipes": [
-      {
-        "title": "...",
-        "videoUrl": "...",
-        "ingredients": [
-          {"name": "...", "quantity": 200, "unit": "g"}
-        ],
-        "servings": 2,
-        "prep_time_minutes": 20,
-        "steps": ["...", "..."]
-      }
-    ]
-  }
-  `;
+export async function generateRecipes(preferences: any): Promise<Recipe[]> {
+  const prompt = buildPrompt(preferences);
 
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini", // or your OSS LLM endpoint
