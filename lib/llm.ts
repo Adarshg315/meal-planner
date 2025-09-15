@@ -3,14 +3,37 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { Preferences, Recipe } from "@/lib/types";
 
-import OpenAI from "openai";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { StructuredOutputParser } from "@langchain/core/output_parsers";
+import { z } from "zod";
+
 import { buildPrompt, getBlockedRecipes } from "./recipeUtils";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// ✅ Define schema for recipe output
+const recipeSchema = z.object({
+  recipes: z.array(
+    z.object({
+      title: z.string(),
+      ingredients: z.array(z.string()),
+      instructions: z.string(),
+      videoUrl: z.string().optional(),
+      servings: z.number(),
+      prep_time_minutes: z.number(),
+      steps: z.array(z.string()),
+    })
+  ),
 });
 
-// 🔥 Simple helper: generate 3 recipes from preferences
+const parser = StructuredOutputParser.fromZodSchema(recipeSchema as any);
+
+// 🔑 Initialize Gemini with LangChain wrapper
+const llm = new ChatGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  model: "gemini-2.5-flash-lite	",
+  temperature: 0.7,
+});
+
+// 🔥 Simple helper: generate N recipes from preferences
 export async function generateRecipes(
   preferences: Preferences,
   count: number
@@ -19,24 +42,33 @@ export async function generateRecipes(
   const blocked = await getBlockedRecipes();
   const blockedTitles = blocked.map((r) => r.title);
 
+
   const prompt = buildPrompt(preferences, blockedTitles, count);
 
-  console.log("LLM prompt:", prompt);
+  // 2. Run Gemini with JSON enforcement
+  const response = await llm.invoke([
+    {
+      role: "user",
+      content: `${prompt}\n\n${parser.getFormatInstructions()}`,
+    },
+  ]);
 
-  const response = await client.chat.completions.create({
-    model: "gpt-4o-mini", // or your OSS LLM endpoint
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
-  });
 
-  let text = response.choices[0].message?.content ?? "{}";
+  if (typeof response.content === "string") {
+    response.content = response.content
+      .replace(/^```json/, "")
+      .replace(/```$/, "")
+      .trim();
+  }
 
-  // Remove backticks to ensure valid JSON
-  text = text.replace(/`/g, "");
+  const content =
+    typeof response.content === "string"
+      ? JSON.parse(response.content)
+      : JSON.parse(JSON.stringify(response.content)); // fallback if structured parts
 
-  const parsed = JSON.parse(text);
 
-  return parsed.recipes.map((r: any) => ({
+  // 4. Attach metadata
+  return content.recipes.map((r: any) => ({
     ...r,
     preparedCount: 0,
     createdAt: new Date().toISOString(),
