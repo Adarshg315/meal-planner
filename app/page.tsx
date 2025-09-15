@@ -1,12 +1,13 @@
 "use client";
 import { defaultPreferences } from "@/lib/constants";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [phoneNumbers, setPhoneNumbers] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const validatePhoneNumber = (num: string) => {
     return /^\+?\d{10,13}$/.test(num);
@@ -46,11 +47,14 @@ export default function Dashboard() {
     });
     setLoading(false);
     alert(`New ${mealType} session created with recipients!`);
+    setPhoneNumbers([]);
+    inputRef.current?.focus();
   };
 
   return (
     <div>
       <input
+        ref={inputRef}
         type="text"
         value={inputValue}
         onChange={handleInputChange}
