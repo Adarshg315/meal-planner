@@ -96,8 +96,8 @@ If you:
 
 …then **come join me!** Fork this repo, open PRs, share recipes, improve the AI prompts, or even just fix typos in the README.
 
-[![GitHub forks](https://img.shields.io/github/forks/your-username/meal-planner?style=social)](https://github.com/your-username/meal-planner/fork)
-[![GitHub stars](https://img.shields.io/github/stars/your-username/meal-planner?style=social)](https://github.com/your-username/meal-planner/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Adarshg315/meal-planner?style=social)](https://github.com/your-username/meal-planner/fork)
+[![GitHub stars](https://img.shields.io/github/stars/Adarshg315/meal-planner?style=social)](https://github.com/your-username/meal-planner/stargazers)
 
 ---
 
