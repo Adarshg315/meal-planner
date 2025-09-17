@@ -5,15 +5,23 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
+interface Recipient {
+  number: string;
+  selected: boolean;
+}
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(false);
-  const [phoneNumbers, setPhoneNumbers] = useState<string[]>([]);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [cookPhoneNumber, setCookPhoneNumber] = useState("");
   const [error, setError] = useState({ input: "", cook: "" });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const validatePhoneNumber = (num: string) => /^\+?\d{10}$/.test(num);
+  // validation helpers
+  const validateLocal = (s: string) => /^\d{10}$/.test(s);
+  const validateIntl = (s: string) => /^\+91\d{10}$/.test(s);
+  const validatePhoneNumber = (s: string) => validateLocal(s) || validateIntl(s);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value.trim();
@@ -24,17 +32,7 @@ export default function Dashboard() {
       return;
     }
 
-    if (validatePhoneNumber(input) && !input.startsWith("+")) {
-      setPhoneNumbers([...phoneNumbers, `+91${input}`]);
-      setInputValue("");
-      setError((prev) => ({ ...prev, input: "" }));
-    } else if (validatePhoneNumber(input)) {
-      setPhoneNumbers([...phoneNumbers, input]);
-      setInputValue("");
-      setError((prev) => ({ ...prev, input: "" }));
-    } else {
-      setError((prev) => ({ ...prev, input: "Invalid phone number" }));
-    }
+    setError((prev) => ({ ...prev, input: "" }));
   };
 
   const handleCookNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,22 +44,29 @@ export default function Dashboard() {
       return;
     }
 
-    if (!validatePhoneNumber(number)) {
+    if (!(validateLocal(number) || validateIntl(number))) {
       setError((prev) => ({ ...prev, cook: "Invalid cook phone number" }));
     } else {
       setError((prev) => ({ ...prev, cook: "" }));
     }
   };
 
+  const normalizeToE164India = (s: string) => {
+    if (validateIntl(s)) return s;
+    if (validateLocal(s)) return `+91${s}`;
+    return s;
+  };
+
   const saveCookNumber = async () => {
     const currentUser = auth.currentUser;
-
     if (!currentUser) {
       alert("You must be logged in.");
       return;
     }
 
-    if (!validatePhoneNumber(cookPhoneNumber)) {
+    const normalized = normalizeToE164India(cookPhoneNumber);
+
+    if (!validateIntl(normalized)) {
       setError((prev) => ({
         ...prev,
         cook: "Please enter a valid cook phone number.",
@@ -71,62 +76,96 @@ export default function Dashboard() {
 
     setError((prev) => ({ ...prev, cook: "" }));
 
-    // Merge cookPhoneNumber into the existing user doc
     const userRef = doc(db, "users", currentUser.uid);
     await setDoc(
       userRef,
-      {
-        cookPhoneNumber,
-      },
+      { cookPhoneNumber: normalized },
       { merge: true }
     );
 
     alert("Cook phone number saved!");
   };
 
-  const removePhoneNumber = (num: string) => {
-    setPhoneNumbers(phoneNumbers.filter((phone) => phone !== num));
+  const addRecipient = () => {
+    const input = inputValue.trim();
+    if (!input) return;
+
+    let normalized = "";
+    if (validateLocal(input)) normalized = `+91${input}`;
+    else if (validateIntl(input)) normalized = input;
+    else {
+      setError((prev) => ({ ...prev, input: "Invalid phone number" }));
+      return;
+    }
+
+    if (recipients.some((r) => r.number === normalized)) {
+      setError((prev) => ({ ...prev, input: "Number already added" }));
+      return;
+    }
+
+    setRecipients([...recipients, { number: normalized, selected: true }]);
+    setInputValue("");
+    setError((prev) => ({ ...prev, input: "" }));
+  };
+
+  const toggleRecipient = (index: number) => {
+    const updated = [...recipients];
+    updated[index].selected = !updated[index].selected;
+    setRecipients(updated);
+  };
+
+  const deleteRecipient = (index: number) => {
+    const updated = recipients.filter((_, i) => i !== index);
+    setRecipients(updated);
   };
 
   const createSession = async (mealType: string) => {
-    if (phoneNumbers.length === 0) {
+    const selectedNumbers = recipients
+      .filter((r) => r.selected)
+      .map((r) => r.number);
+
+    if (selectedNumbers.length === 0) {
       setError((prev) => ({
         ...prev,
-        input: "Please enter at least one valid phone number.",
+        input: "Please select at least one recipient.",
       }));
       return;
     }
+
     setError((prev) => ({ ...prev, input: "" }));
     setLoading(true);
+
     await fetch("/api/meal-sessions/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mealType,
         prefs: defaultPreferences,
-        recipients: phoneNumbers,
+        recipients: selectedNumbers,
       }),
     });
+
     setLoading(false);
     alert(`New ${mealType} session created with recipients!`);
-    setPhoneNumbers([]);
+    setRecipients([]);
+    setInputValue("");
     inputRef.current?.focus();
   };
 
   const fetchCookNumber = async (uid: string) => {
     const userDoc = await getDoc(doc(db, "users", uid));
     if (userDoc.exists()) {
-      setCookPhoneNumber(userDoc.data().cookPhoneNumber || "");
+      const stored = userDoc.data().cookPhoneNumber || "";
+      setCookPhoneNumber(
+        typeof stored === "string" ? stored.replace(/^\+91/, "") : ""
+      );
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        fetchCookNumber(user.uid);
-      } else {
-        setCookPhoneNumber(""); // reset if logged out
-      }
+      if (user) fetchCookNumber(user.uid);
+      else setCookPhoneNumber("");
     });
 
     return () => unsubscribe();
@@ -135,30 +174,52 @@ export default function Dashboard() {
   return (
     <div className="flex items-center justify-center">
       <div className="w-full max-w-md">
+        {/* Recipient input */}
         <div className="mb-4">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            maxLength={10}
-            onChange={handleInputChange}
-            className="border mb-4 p-2 w-full"
-            placeholder="Enter the phone number(s)"
-          />
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              maxLength={10}
+              onChange={handleInputChange}
+              className="border p-2 flex-1"
+              placeholder="Enter recipient phone number"
+            />
+            <button
+              onClick={addRecipient}
+              className="px-4 py-2 bg-blue-500 text-white rounded"
+            >
+              Add
+            </button>
+          </div>
+
           {error.input && <p className="text-red-500 mb-4">{error.input}</p>}
-          {phoneNumbers.map((num, index) => (
-            <div key={index} className="flex items-center justify-between mb-2">
-              <span>{num}</span>
+
+          {recipients.map((r, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between mb-2 border p-2 rounded"
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={r.selected}
+                  onChange={() => toggleRecipient(index)}
+                />
+                <span>{r.number}</span>
+              </div>
               <button
-                onClick={() => removePhoneNumber(num)}
-                className="text-red-500"
+                onClick={() => deleteRecipient(index)}
+                className="bg-red-500 text-white px-2 py-1 rounded"
               >
-                x
+                Delete
               </button>
             </div>
           ))}
         </div>
 
+        {/* Cook number input */}
         <div className="mb-4 flex items-center">
           <input
             type="text"
@@ -177,6 +238,7 @@ export default function Dashboard() {
         </div>
         {error.cook && <p className="text-red-500 mb-4">{error.cook}</p>}
 
+        {/* Session buttons */}
         <div className="flex gap-4">
           <button
             onClick={() => createSession("lunch")}
