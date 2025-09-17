@@ -1,5 +1,7 @@
 // lib/types.ts
 
+import { Timestamp } from "firebase/firestore";
+
 // Allowed units for ingredients (expand later if needed)
 export type Unit = "piece" | "g" | "ml" | "tsp" | "tbsp" | "cup" | "pcs";
 
@@ -22,7 +24,7 @@ export interface Recipe {
   servings: number;
   prep_time_minutes: number;
   steps: string[];
-  createdAt?: string; // ISO string or Firestore timestamp
+  createdAt?: Timestamp; // ISO string or Firestore timestamp
   preparedCount: number; // how many times cooked
   lastPreparedAt?: string; // ISO string, updated when meal confirmed
 }

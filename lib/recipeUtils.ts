@@ -7,17 +7,16 @@ export function buildPrompt(
   blockedTitles: string[],
   count = 3
 ): string {
-  
   let prefText = "";
-  
+
   if (preferences) {
     prefText = `
       STRICT USER PREFERENCES (must be followed exactly):
       - Cuisine: ${preferences.cuisine || "any"}
       - Diet: ${preferences.diet || "any"}
       - Avoid ingredients (must NOT appear in recipe): ${
-            preferences.avoid?.join(", ") || "none"
-          }
+        preferences.avoid?.join(", ") || "none"
+      }
       - Spice level: ${preferences.spiceLevel || "any"}
       - Meal type: ${preferences.mealType || "any"}
       - Maximum prep/cook time: ${preferences.timeLimit || "any"} minutes
@@ -25,15 +24,13 @@ export function buildPrompt(
   }
 
   let blockedText = "";
-  
+
   if (blockedTitles.length > 0) {
     blockedText = `
       DO NOT generate any of these recipes (avoid exact or similar names):
       ${blockedTitles.join(", ")}
     `;
   }
-  
-  console.log("Blocked recipes:", blockedTitles);
 
 
   return `
@@ -45,10 +42,10 @@ export function buildPrompt(
     - Ensure prep_time_minutes does not exceed the specified limit (if provided).
     - Use realistic ingredients and steps that are cookable in a home kitchen.
     - ${
-        blockedTitles.length > 0
-          ? "Never include or duplicate the blocked recipes listed below."
-          : ""
-      }
+      blockedTitles.length > 0
+        ? "Never include or duplicate the blocked recipes listed below."
+        : ""
+    }
 
     ${blockedText}
 
@@ -104,8 +101,7 @@ export function isValidRecipe(recipe: Partial<Recipe>): recipe is Recipe {
     typeof recipe.prep_time_minutes === "number" &&
     Array.isArray(recipe.steps) &&
     recipe.steps.length > 0 &&
-    typeof recipe.preparedCount === "number" &&
-    typeof recipe.createdAt === "string"
+    typeof recipe.preparedCount === "number"
   );
 }
 
@@ -126,7 +122,8 @@ export async function getBlockedRecipes(): Promise<Recipe[]> {
     .map((d) => ({ id: d.id, ...d.data() } as Recipe))
     .filter((r) => {
       if (!r.createdAt) return false;
-      const createdAt = new Date(r.createdAt);
+      const createdAt = new Date(r.createdAt.seconds * 1000); // Convert Timestamp.seconds to milliseconds
+
       return createdAt >= yesterday && createdAt <= tomorrow;
     });
 }
