@@ -1,8 +1,9 @@
 "use client";
 import { defaultPreferences } from "@/lib/constants";
 import { useEffect, useState, useRef } from "react";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(false);
@@ -12,9 +13,7 @@ export default function Dashboard() {
   const [error, setError] = useState({ input: "", cook: "" });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const validatePhoneNumber = (num: string) => {
-    return /^\+?\d{10}$/.test(num);
-  };
+  const validatePhoneNumber = (num: string) => /^\+?\d{10}$/.test(num);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value.trim();
@@ -26,25 +25,22 @@ export default function Dashboard() {
     }
 
     if (validatePhoneNumber(input) && !input.startsWith("+")) {
-      setError((prev) => ({ ...prev, input: "" }));
       setPhoneNumbers([...phoneNumbers, `+91${input}`]);
       setInputValue("");
-    } else if (validatePhoneNumber(input)) {
       setError((prev) => ({ ...prev, input: "" }));
+    } else if (validatePhoneNumber(input)) {
       setPhoneNumbers([...phoneNumbers, input]);
       setInputValue("");
+      setError((prev) => ({ ...prev, input: "" }));
     } else {
       setError((prev) => ({ ...prev, input: "Invalid phone number" }));
     }
   };
 
   const handleCookNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-
-    
-    const number = e.target.value;
+    const number = e.target.value.trim();
     setCookPhoneNumber(number);
 
-    
     if (!number) {
       setError((prev) => ({ ...prev, cook: "" }));
       return;
@@ -58,6 +54,13 @@ export default function Dashboard() {
   };
 
   const saveCookNumber = async () => {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      alert("You must be logged in.");
+      return;
+    }
+
     if (!validatePhoneNumber(cookPhoneNumber)) {
       setError((prev) => ({
         ...prev,
@@ -65,8 +68,19 @@ export default function Dashboard() {
       }));
       return;
     }
+
     setError((prev) => ({ ...prev, cook: "" }));
-    await setDoc(doc(db, "cooks", cookPhoneNumber), { phoneNumber: cookPhoneNumber });
+
+    // Merge cookPhoneNumber into the existing user doc
+    const userRef = doc(db, "users", currentUser.uid);
+    await setDoc(
+      userRef,
+      {
+        cookPhoneNumber,
+      },
+      { merge: true }
+    );
+
     alert("Cook phone number saved!");
   };
 
@@ -99,18 +113,23 @@ export default function Dashboard() {
     inputRef.current?.focus();
   };
 
-  const fetchCookNumber = async () => {
-    const querySnapshot = await getDocs(collection(db, "cooks"));
-
-    querySnapshot.forEach((doc) => {
-      if (doc.id === "phoneNumber") {
-        setCookPhoneNumber(doc.data().cookPhoneNumber || "");
-      }
-    });
+  const fetchCookNumber = async (uid: string) => {
+    const userDoc = await getDoc(doc(db, "users", uid));
+    if (userDoc.exists()) {
+      setCookPhoneNumber(userDoc.data().cookPhoneNumber || "");
+    }
   };
 
   useEffect(() => {
-    fetchCookNumber();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchCookNumber(user.uid);
+      } else {
+        setCookPhoneNumber(""); // reset if logged out
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
@@ -139,6 +158,7 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
         <div className="mb-4 flex items-center">
           <input
             type="text"
@@ -156,6 +176,7 @@ export default function Dashboard() {
           </button>
         </div>
         {error.cook && <p className="text-red-500 mb-4">{error.cook}</p>}
+
         <div className="flex gap-4">
           <button
             onClick={() => createSession("lunch")}
