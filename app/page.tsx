@@ -18,38 +18,10 @@ export default function Dashboard() {
   const [error, setError] = useState({ input: "", cook: "" });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // validation helpers
   const validateLocal = (s: string) => /^\d{10}$/.test(s);
   const validateIntl = (s: string) => /^\+91\d{10}$/.test(s);
-  const validatePhoneNumber = (s: string) => validateLocal(s) || validateIntl(s);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target.value.trim();
-    setInputValue(input);
-
-    if (input === "") {
-      setError((prev) => ({ ...prev, input: "" }));
-      return;
-    }
-
-    setError((prev) => ({ ...prev, input: "" }));
-  };
-
-  const handleCookNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const number = e.target.value.trim();
-    setCookPhoneNumber(number);
-
-    if (!number) {
-      setError((prev) => ({ ...prev, cook: "" }));
-      return;
-    }
-
-    if (!(validateLocal(number) || validateIntl(number))) {
-      setError((prev) => ({ ...prev, cook: "Invalid cook phone number" }));
-    } else {
-      setError((prev) => ({ ...prev, cook: "" }));
-    }
-  };
+  const validatePhoneNumber = (s: string) =>
+    validateLocal(s) || validateIntl(s);
 
   const normalizeToE164India = (s: string) => {
     if (validateIntl(s)) return s;
@@ -57,32 +29,34 @@ export default function Dashboard() {
     return s;
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value.trim());
+    setError((prev) => ({ ...prev, input: "" }));
+  };
+
+  const handleCookNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const number = e.target.value.trim();
+    setCookPhoneNumber(number);
+    if (!number) return setError((prev) => ({ ...prev, cook: "" }));
+    setError((prev) => ({
+      ...prev,
+      cook: validatePhoneNumber(number) ? "" : "Invalid cook phone number",
+    }));
+  };
+
   const saveCookNumber = async () => {
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-      alert("You must be logged in.");
-      return;
-    }
+    if (!currentUser) return alert("You must be logged in.");
 
     const normalized = normalizeToE164India(cookPhoneNumber);
-
-    if (!validateIntl(normalized)) {
-      setError((prev) => ({
+    if (!validateIntl(normalized))
+      return setError((prev) => ({
         ...prev,
         cook: "Please enter a valid cook phone number.",
       }));
-      return;
-    }
-
-    setError((prev) => ({ ...prev, cook: "" }));
 
     const userRef = doc(db, "users", currentUser.uid);
-    await setDoc(
-      userRef,
-      { cookPhoneNumber: normalized },
-      { merge: true }
-    );
-
+    await setDoc(userRef, { cookPhoneNumber: normalized }, { merge: true });
     alert("Cook phone number saved!");
   };
 
@@ -91,21 +65,16 @@ export default function Dashboard() {
     if (!input) return;
 
     let normalized = "";
-    if (validateLocal(input)) normalized = `+91${input}`;
-    else if (validateIntl(input)) normalized = input;
-    else {
-      setError((prev) => ({ ...prev, input: "Invalid phone number" }));
-      return;
-    }
+    if (/^\d{10}$/.test(input)) normalized = `+91${input}`;
+    else if (/^\+91\d{10}$/.test(input)) normalized = input;
+    else
+      return setError((prev) => ({ ...prev, input: "Invalid phone number" }));
 
-    if (recipients.some((r) => r.number === normalized)) {
-      setError((prev) => ({ ...prev, input: "Number already added" }));
-      return;
-    }
+    if (recipients.some((r) => r.number === normalized))
+      return setError((prev) => ({ ...prev, input: "Number already added" }));
 
     setRecipients([...recipients, { number: normalized, selected: true }]);
     setInputValue("");
-    setError((prev) => ({ ...prev, input: "" }));
   };
 
   const toggleRecipient = (index: number) => {
@@ -119,35 +88,60 @@ export default function Dashboard() {
     setRecipients(updated);
   };
 
-  const createSession = async (mealType: string) => {
-    const selectedNumbers = recipients
-      .filter((r) => r.selected)
-      .map((r) => r.number);
+  const fetchRecipients = async (uid: string) => {
+    const userDoc = await getDoc(doc(db, "users", uid));
+    if (userDoc.exists()) {
+      const saved: Recipient[] = userDoc.data().recipients || [];
+      // keep the +91 prefix for display
+      setRecipients(
+        saved.map((r) => ({
+          number: r.number,
+          selected: r.selected, // default to selected when fetching
+        }))
+      );
+    }
+  };
 
-    if (selectedNumbers.length === 0) {
-      setError((prev) => ({
+  const createSession = async (mealType: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return alert("You must be logged in.");
+
+    const selectedRecipients = recipients
+      .filter((r) => r.selected)
+      .map((r) => ({ number: r.number, selected: r.selected }));
+
+    if (selectedRecipients.length === 0)
+      return setError((prev) => ({
         ...prev,
         input: "Please select at least one recipient.",
       }));
-      return;
-    }
 
     setError((prev) => ({ ...prev, input: "" }));
     setLoading(true);
 
+    // Save session
     await fetch("/api/meal-sessions/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         mealType,
         prefs: defaultPreferences,
-        recipients: selectedNumbers,
+        recipients: selectedRecipients,
       }),
     });
 
+    // Persist all numbers in Firestore (merge new numbers)
+    const userRef = doc(db, "users", currentUser.uid);
+
+    const currentNumbers = recipients.map((r) => ({
+      number: r.number,
+      selected: r.selected,
+    }));
+
+    await setDoc(userRef, { recipients: currentNumbers }, { merge: true });
+
     setLoading(false);
     alert(`New ${mealType} session created with recipients!`);
-    setRecipients([]);
     setInputValue("");
     inputRef.current?.focus();
   };
@@ -164,10 +158,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) fetchCookNumber(user.uid);
-      else setCookPhoneNumber("");
+      if (user) {
+        fetchCookNumber(user.uid);
+        fetchRecipients(user.uid);
+      } else {
+        setCookPhoneNumber("");
+      }
     });
-
     return () => unsubscribe();
   }, []);
 
